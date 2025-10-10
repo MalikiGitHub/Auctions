@@ -1,0 +1,121 @@
+{% extends "auctions/layout.html" %}
+
+{% block body %}
+    <h2>My Watchlist</h2>
+    
+    {% if user.is_authenticated %}
+        {% with watchlist_items=user.watchlisted_items.all %}
+            {% if watchlist_items %}
+                <p>Here are the items in your watchlist:</p>
+                
+                {% for listing in watchlist_items %}
+                <div class="row align-items-start pb-3 mb-3 border-bottom" id="listing-{{ listing.id }}">
+                    <div class="col">
+                        {% if listing.image %}
+                        <img src="{{ listing.image.url }}" alt="Image for {{ listing.title }}" style="max-width:200px; max-height:200px;">
+                        {% else %}
+                        <p>No image available</p>
+                        {% endif %}
+                    </div>
+                    <div class="col">
+                        <p class="font-weight-bold">{{ listing.title }}</p>
+                        <p class="font-weight-bold">Price: ${{ listing.price }}</p>
+                        <p class="font-weight-bold">Category: {{ listing.category.name|default:"Uncategorized" }}</p>
+                        <p class="text-muted">Posted: {{ listing.created_date|date:"M j, Y. g.iA"|lower }}</p>
+                        <p>Owner: {{ listing.owner.username }}</p>
+                    </div>
+
+                    <div class="col">
+                        <button class="btn btn-danger remove-watchlist-btn"
+                                data-listing-id="{{ listing.id }}"
+                                data-listing-title="{{ listing.title }}"
+                                data-url="{% url 'toggle_watchlist' listing.id %}">
+                            ★ Remove from Watchlist
+                        </button>
+                        <div class="watchlist-message mt-2"></div>
+                    </div>
+                </div>
+                {% endfor %}
+
+                <!-- Pagination would go here -->
+                
+            {% else %}
+                <div class="alert alert-info empty-watchlist-message">
+                    Your watchlist is empty. <a href="{% url 'index' %}">Browse listings</a> to add items to your watchlist.
+                </div>
+            {% endif %}
+        {% endwith %}
+
+    {% else %}
+        <div class="alert alert-warning">
+            Please <a href="{% url 'login' %}">log in</a> to view your watchlist.
+        </div>
+    {% endif %}
+
+    {% if user.is_authenticated %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.remove-watchlist-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            const listingId = this.dataset.listingId;
+            const url = this.dataset.url;
+            const listingTitle = this.dataset.listingTitle;
+            const listingElement = document.getElementById(`listing-${listingId}`);
+            const button = this;
+            const messageDiv = this.nextElementSibling;
+
+            button.disabled = true;
+            button.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Removing...';
+
+            fetch(url, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': '{{ csrf_token }}',
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success' && !data.is_watchlisted) {
+                    messageDiv.innerHTML = `<div class="alert alert-success">${data.message}</div>`;
+                    
+                    listingElement.style.opacity = '0';
+                    listingElement.style.transition = 'opacity 0.3s ease';
+                    
+                    setTimeout(() => {
+                        listingElement.remove();
+                        
+                        // UPDATE NAVIGATION BADGE - Call the API endpoint
+                        if (typeof updateNavWatchlistCount === 'function') {
+                            updateNavWatchlistCount();
+                        }
+                        
+                        // Check if this was the last item
+                        const remainingItems = document.querySelectorAll('[id^="listing-"]');
+                        if (remainingItems.length === 0) {
+                            // Remove the "Here are items" text
+                            const itemsText = document.querySelector('p');
+                            if (itemsText) itemsText.remove();
+                            
+                            // Add empty message
+                            const emptyMsg = document.createElement('div');
+                            emptyMsg.className = 'alert alert-info empty-watchlist-message mt-3';
+                            emptyMsg.innerHTML = `Your watchlist is empty. <a href="{% url 'index' %}">Browse listings</a> to add items to your watchlist.`;
+                            document.querySelector('h2').insertAdjacentElement('afterend', emptyMsg);
+                        }
+                    }, 300);
+
+                    setTimeout(() => messageDiv.innerHTML = '', 3000);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                messageDiv.innerHTML = `<div class="alert alert-danger">Error removing from watchlist</div>`;
+                button.disabled = false;
+                button.innerHTML = '★ Remove from Watchlist';
+            });
+        });
+    });
+});
+</script>
+{% endif %}
+{% endblock body %}

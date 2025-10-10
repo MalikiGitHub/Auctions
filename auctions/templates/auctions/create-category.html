@@ -1,0 +1,37 @@
+{% extends "auctions/layout.html" %}
+
+{% block body %}
+    <h2>Create a New Listing</h2>
+
+    <form action="{% url 'create-category' %}" method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        
+        {% for field in form %}
+            <div class="form-group">
+                <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                {{ field }}
+                {% if field.errors %}
+                    <div class="alert alert-danger mt-2">
+                        {% for error in field.errors %}
+                            <small>{{ error }}</small>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            </div>
+        {% endfor %}
+               
+        <button type="submit" class="btn btn-primary">Create Category </button>
+    </form>
+
+        <div>
+        <p class="text-muted"> Available Categories </p>
+        {% for category in categories %}
+        <ul>
+            <li>{{ category.name }}</li>
+        </ul>
+        {% empty %}
+            <li>No categories available.</li>
+        {% endfor %}
+    </div>
+    <a href="{% url 'index' %}"> Go to Listings</a>
+{% endblock body %}

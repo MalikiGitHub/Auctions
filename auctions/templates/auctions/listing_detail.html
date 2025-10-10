@@ -1,0 +1,324 @@
+{% extends "auctions/layout.html" %}
+
+{% block body %}
+    <div class="container">
+        <div class="row">
+            <div class="col-md-8">
+                <h2>{{ listing.title }}</h2>
+                <p><strong>Current Price:</strong> ${{ listing.current_price|default:listing.starting_price }}</p>
+                <p><strong>Starting Price:</strong> ${{ listing.starting_price }}</p>
+                <p><strong>Description:</strong> {{ listing.description }}</p>
+                <p><strong>Category:</strong> {{ listing.category.name|default:"Uncategorized" }}</p>
+                <p><strong>Owner:</strong> {{ listing.owner.username }}</p>
+                <p><strong>Created:</strong> {{ listing.created_date|date:"M j, Y" }}</p>
+                <p><strong>Status:</strong> 
+                    {% if listing.is_active %}
+                        <span class="badge bg-success">Active</span>
+                    {% else %}
+                        <span class="badge bg-secondary">Closed</span>
+                        {% if listing.winner %}
+                            <span class="badge bg-primary">Winner: {{ listing.winner.username }}</span>
+                        {% endif %}
+                    {% endif %}
+                </p>
+                
+                {% if user.is_authenticated %}
+                <!-- Watchlist Button -->
+                <div class="mt-4">
+                    <button class="watchlist-btn btn {% if is_watchlisted %}btn-warning{% else %}btn-outline-warning{% endif %}"
+                            data-listing-id="{{ listing.id }}"
+                            data-url="{% url 'toggle_watchlist' listing.id %}">
+                        {% if is_watchlisted %}
+                            ★ Remove from Watchlist
+                        {% else %}
+                            ☆ Add to Watchlist
+                        {% endif %}
+                    </button>
+                    <div class="watchlist-message mt-2"></div>
+                    <small class="text-muted">{{ listing.watchlist.count }} user(s) watching this item</small>
+                </div>
+
+                <!-- DELETE BUTTON - Only show to listing owner -->
+                {% if user == listing.owner %}
+                <div class="mt-3">
+                    <form method="post" action="{% url 'delete_listing' listing.id %}" id="delete-form" class="d-inline">
+                        {% csrf_token %}
+                        <button type="button" class="btn btn-danger" onclick="confirmDelete()">
+                            🗑️ Delete Listing
+                        </button>
+                    </form>
+                    <div id="delete-message" class="mt-2"></div>
+                </div>
+                {% endif %}
+                <!-- END DELETE BUTTON -->
+
+                {% else %}
+                <div class="alert alert-info">
+                    <a href="{% url 'login' %}">Log in</a> to add this item to your watchlist or place bids.
+                </div>
+                {% endif %}
+            </div>
+            
+            <div class="col-md-4">
+                {% if listing.image %}
+                    <img src="{{ listing.image.url }}" alt="{{ listing.title }}" class="img-fluid rounded">
+                {% else %}
+                    <div class="text-center text-muted py-5 border rounded">
+                        No image available
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Bid Form Section -->
+        {% if user.is_authenticated and user != listing.owner and listing.is_active %}
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h4>Place a Bid</h4>
+                    </div>
+                    <div class="card-body">
+                        <!-- Display form errors if any -->
+                        {% if messages %}
+                            {% for message in messages %}
+                                {% if 'bid' in message.tags or 'error' in message.tags %}
+                                <div class="alert alert-danger">
+                                    {{ message }}
+                                </div>
+                                {% endif %}
+                            {% endfor %}
+                        {% endif %}
+
+                        <form method="post" action="{% url 'place_bid' listing.id %}">
+                            {% csrf_token %}
+                            <div class="form-group">
+                                <label for="bid_amount"><strong>Your Bid Amount:</strong></label>
+                                <div class="input-group">
+                                    <div class="input-group-prepend">
+                                        <span class="input-group-text">$</span>
+                                    </div>
+                                    <input type="number" 
+                                           name="amount" 
+                                           id="bid_amount"
+                                           class="form-control" 
+                                           step="0.01" 
+                                           min="{{ listing.current_price|default:listing.starting_price|add:'0.01' }}"
+                                           placeholder="0.00"
+                                           required>
+                                </div>
+                                <small class="form-text text-muted">
+                                    Must be higher than current price of ${{ listing.current_price|default:listing.starting_price }}.
+                                    Minimum bid: ${{ listing.current_price|default:listing.starting_price|add:"1" }}.
+                                </small>
+                            </div>
+                            <button type="submit" class="btn btn-success btn-lg">Place Bid</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% elif user.is_authenticated and user == listing.owner and listing.is_active %}
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="alert alert-info">
+                    <h5>Owner Controls</h5>
+                    <p>You cannot bid on your own listing.</p>
+                    <form method="post" action="{% url 'close_auction' listing.id %}" class="d-inline">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-warning">Close Auction</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        {% elif not listing.is_active %}
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="alert alert-secondary">
+                    <h5>Auction Closed</h5>
+                    {% if listing.winner %}
+                        <p>Winner: <strong>{{ listing.winner.username }}</strong> with a bid of <strong>${{ listing.current_price }}</strong></p>
+                        {% if user == listing.winner %}
+                            <div class="alert alert-success">
+                                🎉 Congratulations! You won this auction!
+                            </div>
+                        {% endif %}
+                    {% else %}
+                        <p>This auction ended with no bids.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Bids History Section -->
+        <div class="row mt-4">
+            <div class="col-12">
+                <h4>Bid History ({{ page_obj.paginator.count }} total bids)</h4>
+                
+                {% if page_obj %}
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Bidder</th>
+                                    <th>Amount</th>
+                                    <th>Time</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for bid in page_obj %}
+                                    <tr {% if bid.amount == listing.current_price %}class="table-success"{% endif %}>
+                                        <td>
+                                            {{ bid.user.username }}
+                                            {% if bid.user == listing.owner %}
+                                                <span class="badge bg-info">Owner</span>
+                                            {% endif %}
+                                        </td>
+                                        <td><strong>${{ bid.amount }}</strong></td>
+                                        <td>{{ bid.bid_time|date:"M j, Y. g:iA"|lower }}</td>
+                                        <td>
+                                            {% if bid.amount == listing.current_price %}
+                                                <span class="badge bg-success">Winning</span>
+                                            {% else %}
+                                                <span class="badge bg-secondary">Outbid</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <!-- Pagination -->
+                    <div class="pagination mt-3">
+                        <span class="page-links">
+                            {% if page_obj.has_previous %}
+                                <a href="?page=1" class="btn btn-sm btn-outline-primary">&laquo; first</a>
+                                <a href="?page={{ page_obj.previous_page_number }}" class="btn btn-sm btn-outline-primary">previous</a>
+                            {% endif %}
+
+                            <span class="current mx-2">
+                                Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}.
+                            </span>
+
+                            {% if page_obj.has_next %}
+                                <a href="?page={{ page_obj.next_page_number }}" class="btn btn-sm btn-outline-primary">next</a>
+                                <a href="?page={{ page_obj.paginator.num_pages }}" class="btn btn-sm btn-outline-primary">last &raquo;</a>
+                            {% endif %}
+                        </span>
+                    </div>
+                {% else %}
+                    <div class="alert alert-info">
+                        No bids yet. Be the first to bid on this item!
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    {% if user.is_authenticated %}
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const watchlistBtn = document.querySelector('.watchlist-btn');
+        if (watchlistBtn) {
+            watchlistBtn.addEventListener('click', function() {
+                const listingId = this.dataset.listingId;
+                const url = this.dataset.url;
+                const button = this;
+                const messageDiv = document.querySelector('.watchlist-message');
+                
+                console.log('Toggle watchlist for listing:', listingId);
+                
+                button.disabled = true;
+                button.innerHTML = '⏳ Processing...';
+                
+                fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': '{{ csrf_token }}',
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    console.log('Response data:', data);
+                    
+                    if (data.status === 'success') {
+                        if (data.is_watchlisted) {
+                            button.classList.remove('btn-outline-warning');
+                            button.classList.add('btn-warning');
+                            button.innerHTML = '★ Remove from Watchlist';
+                        } else {
+                            button.classList.remove('btn-warning');
+                            button.classList.add('btn-outline-warning');
+                            button.innerHTML = '☆ Add to Watchlist';
+                        }
+                        
+                        // UPDATE NAVIGATION BADGE
+                        if (typeof updateNavWatchlistCount === 'function') {
+                            updateNavWatchlistCount();
+                        }
+                        
+                        messageDiv.innerHTML = `<div class="alert alert-success">${data.message}</div>`;
+                        
+                        setTimeout(() => {
+                            messageDiv.innerHTML = '';
+                        }, 3000);
+                    }
+                })
+                .catch(error => {
+                    console.error('Fetch error:', error);
+                    messageDiv.innerHTML = `<div class="alert alert-danger">Network error: ${error.message}</div>`;
+                })
+                .finally(() => {
+                    button.disabled = false;
+                });
+            });
+        }
+
+        // Auto-focus on bid amount field and select all text for easy replacement
+        const bidAmountField = document.getElementById('bid_amount');
+        if (bidAmountField) {
+            bidAmountField.focus();
+            
+            // Select all text when user focuses (makes it easy to type over)
+            bidAmountField.addEventListener('focus', function() {
+                this.select();
+            });
+        }
+
+        // Delete confirmation function
+        window.confirmDelete = function() {
+            Swal.fire({
+                title: 'Permanent Deletion!',
+                text: "This will PERMANENTLY delete your listing and all associated bids. This action cannot be undone!",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#d33',
+                cancelButtonColor: '#3085d6',
+                confirmButtonText: 'Yes, delete permanently!',
+                cancelButtonText: 'Cancel',
+                backdrop: `
+                    rgba(220,53,69,0.4)
+                    url("/images/nyan-cat.gif")
+                    left top
+                    no-repeat
+                `
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    // Show loading state
+                    const deleteBtn = document.querySelector('#delete-form button');
+                    const originalText = deleteBtn.innerHTML;
+                    deleteBtn.innerHTML = '⏳ Deleting...';
+                    deleteBtn.disabled = true;
+
+                    // Submit the form
+                    document.getElementById('delete-form').submit();
+                }
+            });
+        };
+    });
+    </script>
+    {% endif %}
+{% endblock %}
