@@ -73,6 +73,19 @@ def delete_listing(request, listing_id):
     return redirect('index')  # Redirect to home page after deletion
 
 
+def category(request, category_id):
+    category = get_object_or_404(Category, id=category_id)
+    listings = Listing.objects.filter(category=category, is_active=True).order_by('-created_date')
+    
+    paginator = Paginator(listings, 10)  # 10 items per page
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+    
+    return render(request, "auctions/category.html", {
+        "category": category,
+        "page_obj": page_obj
+    })
+
 def login_view(request):
     if request.method == "POST":
 

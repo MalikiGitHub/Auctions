@@ -11,6 +11,7 @@ urlpatterns = [
     path("register", views.register, name="register"),
     path("create-listings", views.create_listings, name="create-listings"),
     path("create-category", views.create_category, name="create-category"),
+    path("category/<int:category_id>", views.category, name="category"),
     path("watchlist", views.view_watchlist, name="watchlist"),
     path("watchlist/toggle/<int:listing_id>", views.toggle_watchlist_ajax, name="toggle_watchlist"),
     path('watchlist/count/', views.watchlist_count, name='watchlist_count'),

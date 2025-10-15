@@ -1,7 +1,7 @@
 {% extends "auctions/layout.html" %}
 {% load static %}
 {% block body %}
-    <h2>Active Listings</h2>
+    <h2>{{category}} Listings</h2>
     <div class="container text-center">
         {% if page_obj %}
         {% for listing in page_obj %}
@@ -26,14 +26,10 @@
                 <button class="watchlist-btn btn {% if user in listing.watchlist.all %}btn-warning{% else %}btn-outline-warning{% endif %}"
                         data-listing-id="{{ listing.id }}" 
                         data-url="{% url 'toggle_watchlist' listing.id %}">
-                    {% if user.is_authenticated %}
                     {% if user in listing.watchlist.all %}
                         ★ Remove from Watchlist
                     {% else %}
                         ☆ Add to Watchlist
-                    {% endif %}
-                        {% else %}
-                        <a class="btn btn-warning btn-sm" href="{% url 'login' %}"> Login to Add to Watchlist </a>
                     {% endif %}
                 </button>
                 
@@ -77,7 +73,6 @@
         </span>
     </div>
 
-     {% if user.is_authenticated %}
     <script>
         // Update the function to accept listing ID
         document.addEventListener('DOMContentLoaded', function() {
@@ -113,7 +108,7 @@
                 });
             });
         });
-       
+
     document.addEventListener('DOMContentLoaded', function() {
         document.querySelectorAll('.watchlist-btn').forEach(button => {
             button.addEventListener('click', function() {
@@ -178,6 +173,5 @@
             });
         });
     });
-    </script>     
-    {% endif %}      
+    </script>           
 {% endblock %}
